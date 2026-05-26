@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Upload Recording{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="logo">
+        <h1>Upload Recording</h1>
+        <p>Upload a video or audio file for transcription</p>
+    </div>
+    <form method="POST" enctype="multipart/form-data" id="uploadForm">
+        <div class="form-group">
+            <label for="title">Recording Title</label>
+            <input type="text" id="title" name="title" required
+                   placeholder="e.g., Sales Call - Acme Corp">
+        </div>
+        <div class="form-group">
+            <label>Recording File</label>
+            <div class="file-drop" id="fileDrop">
+                <input type="file" id="file" name="file" required
+                       accept=".mp3,.mp4,.wav,.m4a,.ogg">
+                <div class="file-drop-text">
+                    <strong>Click to browse</strong> or drag and drop<br>
+                    MP3, MP4, WAV, M4A, OGG — up to 1.5 GB
+                </div>
+            </div>
+            <div class="file-selected" id="fileSelected"></div>
+        </div>
+        <button type="submit" class="btn" id="submitBtn">Upload to Fireflies</button>
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-track">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">Uploading...</div>
+        </div>
+    </form>
+    <div class="footer">
+        <a href="{{ url_for('logout') }}" class="link">Sign out</a>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const fileInput = document.getElementById('file');
+const fileDrop = document.getElementById('fileDrop');
+const fileSelected = document.getElementById('fileSelected');
+const form = document.getElementById('uploadForm');
+const submitBtn = document.getElementById('submitBtn');
+const progressBar = document.getElementById('progressBar');
+const progressFill = document.getElementById('progressFill');
+const progressText = document.getElementById('progressText');
+
+function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+    return (bytes / 1073741824).toFixed(2) + ' GB';
+}
+
+fileInput.addEventListener('change', function() {
+    if (this.files.length > 0) {
+        const f = this.files[0];
+        fileSelected.textContent = f.name + ' (' + formatSize(f.size) + ')';
+        fileSelected.style.display = 'block';
+    }
+});
+
+fileDrop.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    this.classList.add('dragover');
+});
+
+fileDrop.addEventListener('dragleave', function() {
+    this.classList.remove('dragover');
+});
+
+fileDrop.addEventListener('drop', function(e) {
+    e.preventDefault();
+    this.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) {
+        fileInput.files = e.dataTransfer.files;
+        fileInput.dispatchEvent(new Event('change'));
+    }
+});
+
+form.addEventListener('submit', function() {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Uploading...';
+    progressBar.style.display = 'block';
+
+    // Simulate progress for large uploads (actual progress needs XHR)
+    let progress = 0;
+    const interval = setInterval(function() {
+        progress += Math.random() * 5;
+        if (progress > 90) { clearInterval(interval); return; }
+        progressFill.style.width = progress + '%';
+        progressText.textContent = 'Uploading... ' + Math.round(progress) + '%';
+    }, 500);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="logo">
+        <h1>Fireflies Upload</h1>
+        <p>Enter the team password to continue</p>
+    </div>
+    <form method="POST">
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required autofocus
+                   placeholder="Enter team password">
+        </div>
+        <button type="submit" class="btn">Sign In</button>
+    </form>
+</div>
+{% endblock %}

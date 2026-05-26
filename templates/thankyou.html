@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Upload Complete{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="thankyou">
+        <div class="icon">&#10003;</div>
+        <h2>Upload Complete</h2>
+        <p>
+            <span class="title-name">"{{ title }}"</span> has been sent to Fireflies.<br>
+            Transcription will be available in your Fireflies dashboard shortly.
+        </p>
+        <a href="{{ url_for('upload') }}" class="btn">Upload Another</a>
+    </div>
+</div>
+{% endblock %}
