@@ -22,6 +22,7 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", os.urandom(32).hex())
+app.config["MAX_CONTENT_LENGTH"] = 1.5 * 1024 * 1024 * 1024  # 1.5 GB
 
 FIREFLIES_API_URL = "https://api.fireflies.ai/graphql"
 FIREFLIES_API_KEY = os.environ.get("FIREFLIES_API_KEY", "")
