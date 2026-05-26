@@ -117,63 +117,73 @@ def logout():
     return redirect(url_for("login"))
 
 
-@app.route("/", methods=["GET", "POST"])
+@app.route("/")
 def upload():
     if APP_PASSWORD and not session.get("authenticated"):
         return redirect(url_for("login"))
-
-    if request.method == "POST":
-        title = request.form.get("title", "").strip()
-        file = request.files.get("file")
-
-        if not title:
-            flash("Please enter a title.", "error")
-            return render_template("upload.html")
-
-        if not file or file.filename == "":
-            flash("Please select a file.", "error")
-            return render_template("upload.html")
-
-        if not allowed_file(file.filename):
-            flash(f"Invalid file type. Allowed: {', '.join(ALLOWED_EXTENSIONS)}", "error")
-            return render_template("upload.html")
-
-        ext = file.filename.rsplit(".", 1)[1].lower()
-        safe_name = f"{uuid.uuid4().hex}.{ext}"
-        filepath = UPLOAD_DIR / safe_name
-        file.save(filepath)
-
-        file_size = filepath.stat().st_size
-        if file_size > MAX_FILE_SIZE:
-            filepath.unlink(missing_ok=True)
-            flash("File too large. Maximum size is 1.5 GB.", "error")
-            return render_template("upload.html")
-
-        if not PUBLIC_BASE_URL:
-            filepath.unlink(missing_ok=True)
-            flash("Server configuration error: PUBLIC_BASE_URL not set.", "error")
-            return render_template("upload.html")
-
-        file_url = f"{PUBLIC_BASE_URL}/uploads/{safe_name}"
-
-        try:
-            result = send_to_fireflies(file_url, title)
-        except Exception as e:
-            filepath.unlink(missing_ok=True)
-            flash(f"Failed to send to Fireflies: {e}", "error")
-            return render_template("upload.html")
-
-        if not result.get("success"):
-            filepath.unlink(missing_ok=True)
-            flash(f"Fireflies rejected the upload: {result.get('message', 'Unknown error')}", "error")
-            return render_template("upload.html")
-
-        # Schedule file deletion after Fireflies has time to download
-        delete_file_later(filepath, delay_seconds=600)
-
-        return render_template("thankyou.html", title=title)
-
     return render_template("upload.html")
+
+
+@app.route("/api/upload", methods=["POST"])
+def api_upload():
+    if APP_PASSWORD and not session.get("authenticated"):
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+
+    title = request.form.get("title", "").strip()
+    file = request.files.get("file")
+
+    if not title:
+        return jsonify({"success": False, "error": "Please enter a title."})
+
+    if not file or file.filename == "":
+        return jsonify({"success": False, "error": "Please select a file."})
+
+    if not allowed_file(file.filename):
+        return jsonify({"success": False, "error": f"Invalid file type. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"})
+
+    ext = file.filename.rsplit(".", 1)[1].lower()
+    safe_name = f"{uuid.uuid4().hex}.{ext}"
+    filepath = UPLOAD_DIR / safe_name
+
+    # Stream to disk in chunks to avoid memory issues
+    with open(filepath, "wb") as f:
+        while True:
+            chunk = file.stream.read(8192)
+            if not chunk:
+                break
+            f.write(chunk)
+
+    file_size = filepath.stat().st_size
+    if file_size > MAX_FILE_SIZE:
+        filepath.unlink(missing_ok=True)
+        return jsonify({"success": False, "error": "File too large. Maximum size is 1.5 GB."})
+
+    if not PUBLIC_BASE_URL:
+        filepath.unlink(missing_ok=True)
+        return jsonify({"success": False, "error": "Server configuration error: PUBLIC_BASE_URL not set."})
+
+    file_url = f"{PUBLIC_BASE_URL}/uploads/{safe_name}"
+
+    try:
+        result = send_to_fireflies(file_url, title)
+    except Exception as e:
+        filepath.unlink(missing_ok=True)
+        return jsonify({"success": False, "error": f"Failed to send to Fireflies: {e}"})
+
+    if not result.get("success"):
+        filepath.unlink(missing_ok=True)
+        return jsonify({"success": False, "error": f"Fireflies rejected: {result.get('message', 'Unknown error')}"})
+
+    delete_file_later(filepath, delay_seconds=600)
+    return jsonify({"success": True, "title": title})
+
+
+@app.route("/thankyou")
+def thankyou():
+    if APP_PASSWORD and not session.get("authenticated"):
+        return redirect(url_for("login"))
+    title = request.args.get("title", "Your recording")
+    return render_template("thankyou.html", title=title)
 
 
 @app.route("/health")

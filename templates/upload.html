@@ -6,16 +6,16 @@
         <h1>Upload Recording</h1>
         <p>Upload a video or audio file for transcription</p>
     </div>
-    <form method="POST" enctype="multipart/form-data" id="uploadForm">
+    <div id="uploadArea">
         <div class="form-group">
             <label for="title">Recording Title</label>
-            <input type="text" id="title" name="title" required
+            <input type="text" id="title" required
                    placeholder="e.g., Sales Call - Acme Corp">
         </div>
         <div class="form-group">
             <label>Recording File</label>
             <div class="file-drop" id="fileDrop">
-                <input type="file" id="file" name="file" required
+                <input type="file" id="file" required
                        accept=".mp3,.mp4,.wav,.m4a,.ogg">
                 <div class="file-drop-text">
                     <strong>Click to browse</strong> or drag and drop<br>
@@ -24,14 +24,15 @@
             </div>
             <div class="file-selected" id="fileSelected"></div>
         </div>
-        <button type="submit" class="btn" id="submitBtn">Upload to Fireflies</button>
+        <button class="btn" id="submitBtn" onclick="startUpload()">Upload to Fireflies</button>
         <div class="progress-bar" id="progressBar">
             <div class="progress-track">
                 <div class="progress-fill" id="progressFill"></div>
             </div>
             <div class="progress-text" id="progressText">Uploading...</div>
         </div>
-    </form>
+        <div id="errorMsg" class="flash error" style="display:none;margin-top:1rem;"></div>
+    </div>
     <div class="footer">
         <a href="{{ url_for('logout') }}" class="link">Sign out</a>
     </div>
@@ -42,11 +43,11 @@
 const fileInput = document.getElementById('file');
 const fileDrop = document.getElementById('fileDrop');
 const fileSelected = document.getElementById('fileSelected');
-const form = document.getElementById('uploadForm');
 const submitBtn = document.getElementById('submitBtn');
 const progressBar = document.getElementById('progressBar');
 const progressFill = document.getElementById('progressFill');
 const progressText = document.getElementById('progressText');
+const errorMsg = document.getElementById('errorMsg');
 
 function formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
@@ -60,6 +61,7 @@ fileInput.addEventListener('change', function() {
         const f = this.files[0];
         fileSelected.textContent = f.name + ' (' + formatSize(f.size) + ')';
         fileSelected.style.display = 'block';
+        errorMsg.style.display = 'none';
     }
 });
 
@@ -81,19 +83,87 @@ fileDrop.addEventListener('drop', function(e) {
     }
 });
 
-form.addEventListener('submit', function() {
+function showError(msg) {
+    errorMsg.textContent = msg;
+    errorMsg.style.display = 'block';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Upload to Fireflies';
+    progressBar.style.display = 'none';
+}
+
+function startUpload() {
+    const title = document.getElementById('title').value.trim();
+    const file = fileInput.files[0];
+
+    if (!title) { showError('Please enter a title.'); return; }
+    if (!file) { showError('Please select a file.'); return; }
+
+    const allowed = ['mp3','mp4','wav','m4a','ogg'];
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!allowed.includes(ext)) {
+        showError('Invalid file type. Allowed: ' + allowed.join(', '));
+        return;
+    }
+
+    if (file.size > 1.5 * 1024 * 1024 * 1024) {
+        showError('File too large. Maximum size is 1.5 GB.');
+        return;
+    }
+
+    errorMsg.style.display = 'none';
     submitBtn.disabled = true;
     submitBtn.textContent = 'Uploading...';
     progressBar.style.display = 'block';
+    progressFill.style.width = '0%';
 
-    // Simulate progress for large uploads (actual progress needs XHR)
-    let progress = 0;
-    const interval = setInterval(function() {
-        progress += Math.random() * 5;
-        if (progress > 90) { clearInterval(interval); return; }
-        progressFill.style.width = progress + '%';
-        progressText.textContent = 'Uploading... ' + Math.round(progress) + '%';
-    }, 500);
-});
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('file', file);
+
+    const xhr = new XMLHttpRequest();
+
+    xhr.upload.addEventListener('progress', function(e) {
+        if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            progressFill.style.width = pct + '%';
+            progressText.textContent = 'Uploading... ' + pct + '% (' + formatSize(e.loaded) + ' / ' + formatSize(e.total) + ')';
+        }
+    });
+
+    xhr.addEventListener('load', function() {
+        if (xhr.status === 200) {
+            try {
+                const resp = JSON.parse(xhr.responseText);
+                if (resp.success) {
+                    window.location.href = '/thankyou?title=' + encodeURIComponent(title);
+                } else {
+                    showError(resp.error || 'Upload failed.');
+                }
+            } catch(e) {
+                showError('Unexpected server response.');
+            }
+        } else if (xhr.status === 413) {
+            showError('File too large for server.');
+        } else {
+            showError('Upload failed (HTTP ' + xhr.status + '). Try again.');
+        }
+    });
+
+    xhr.addEventListener('error', function() {
+        showError('Network error. Check your connection and try again.');
+    });
+
+    xhr.addEventListener('abort', function() {
+        showError('Upload cancelled.');
+    });
+
+    xhr.addEventListener('timeout', function() {
+        showError('Upload timed out. Try a smaller file or faster connection.');
+    });
+
+    xhr.open('POST', '/api/upload', true);
+    xhr.timeout = 0;  // no timeout
+    xhr.send(formData);
+}
 </script>
 {% endblock %}
